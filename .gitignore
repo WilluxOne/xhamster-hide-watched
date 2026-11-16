@@ -1,0 +1,19 @@
+# Build outputs & Backups (Global Rules Standard)
+1. Kompilacja/
+BackUp/
+
+# Node dependencies & logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and Editor files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.vscode/
+.idea/
+*.tmp
+*.bak
