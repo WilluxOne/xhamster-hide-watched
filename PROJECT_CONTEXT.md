@@ -68,11 +68,12 @@ Na Pulpicie utworzono skrót:
 
 ## 4. Repozytorium Git i Aktualizacje z GitHub
 
-- **Ścieżka zdalna:** `https://github.com/WilluxOne/xhamster-hide-watched`
+- **Ścieżka zdalna:** `https://github.com/WilluxOne/xhamster-hide-watched` (Repozytorium Publiczne – autoryzowane przez użytkownika)
+- **Bezpośredni link instalacyjny:** `https://raw.githubusercontent.com/WilluxOne/xhamster-hide-watched/main/xhamster-hide-watched.user.js`
 - **Konfiguracja aktualizacji Tampermonkey:**
   - `@updateURL`: `https://raw.githubusercontent.com/WilluxOne/xhamster-hide-watched/main/xhamster-hide-watched.user.js`
   - `@downloadURL`: `https://raw.githubusercontent.com/WilluxOne/xhamster-hide-watched/main/xhamster-hide-watched.user.js`
-- **Bezpieczeństwo i prywatność:** Zgodnie z nadrzędną regułą `RULE[user_global]`, repozytorium GitHub domyślnie tworzone jest jako prywatne (`--private`).
+- **Działanie aktualizacji:** Dzięki widoczności publicznej Tampermonkey automatycznie i natywnie pobiera aktualizacje przy zmianie wersji w nagłówku skryptu bez konieczności podawania tokenów.
 
 ---
 
