@@ -3,13 +3,13 @@
 **Data utworzenia:** 2026-11-17  
 **Autor:** WilluxOne  
 **Środowisko:** Windows 11 x64, Node.js v24.20.0, Tampermonkey (Brave/Chromium/Firefox)  
-**Stan projektu:** Zakończony pomyślnie (Etap v1.0.0 – gotowy do użytku i wdrożenia)
+**Stan projektu:** Zakończony pomyślnie (Etap v1.1.0 – obsługa prawego kliku i ręcznego oznaczania)
 
 ---
 
 ## 1. Cel Projektu
 Stworzenie zaawansowanego, a zarazem prostego w obsłudze skryptu Tampermonkey przeznaczonego dla serwisu `https://xhamster.com` oraz wszystkich jego podstron (kategorie, tagi, wyniki wyszukiwania, kanały, podgląd wideo, subdomeny).
-Skrypt identyfikuje pozycje oznaczone jako już obejrzane (**Watched**) i automatycznie ukrywa je lub wyszarza, zapobiegając zaśmiecaniu katalogu treściami, które użytkownik już widział. Posiada nowoczesny pływający interfejs UI ze statystykami na żywo oraz obsługę automatycznych aktualizacji z GitHuba (`@updateURL`, `@downloadURL`).
+Skrypt identyfikuje pozycje oznaczone jako już obejrzane (**Watched**) oraz umożliwia ręczne oznaczanie filmów jako obejrzane pod prawym przyciskiem myszy (Context Menu). Automatycznie ukrywa je lub wyszarza, zapobiegając zaśmiecaniu katalogu treściami, które użytkownik już widział. Posiada nowoczesny pływający interfejs UI ze statystykami na żywo oraz obsługę automatycznych aktualizacji z GitHuba (`@updateURL`, `@downloadURL`).
 
 ---
 
@@ -79,6 +79,13 @@ Na Pulpicie utworzono skrót:
 
 ## 5. Historia Wersji i Zrealizowane Zadania
 
+- **v1.1.0 (2026-11-17):**
+  - Dodanie obsługi zdarzenia `contextmenu` (prawy przycisk myszy) na kafelkach wideo.
+  - Implementacja dedykowanego ciemnego menu kontekstowego z opcją „Oznacz jako obejrzane (Ukryj)” oraz „Cofnij oznaczenie”.
+  - Trwały zapis ręcznie oznaczonych pozycji w `Storage` (Set ID / slugów).
+  - Dodanie do panelu ustawień licznika ręcznie oznaczonych pozycji i przycisku resetu.
+  - Przepustka `Shift + Prawy klik` dla zachowania standardowego menu przeglądarki.
+  - Rozszerzenie zestawu testów do 12 przypadków testowych (100% pass).
 - **v1.0.0 (2026-11-17):**
   - Implementacja rdzenia detekcji (atrybuty, BEM, tekst).
   - Implementacja silnika stylów CSS `:has()`.

@@ -4,10 +4,16 @@ Skrypt Tampermonkey do automatycznego wykrywania i ukrywania filmów oznaczonych
 
 ## Główne Funkcje
 
+- **Ręczne oznaczanie prawym przyciskiem myszy (Context Menu):**
+  - Kliknięcie prawym przyciskiem myszy (PPM) na dowolnym kafelku wideo otwiera dedykowane menu kontekstowe z opcją **👁️ Oznacz jako obejrzane (Ukryj)** lub **↩️ Cofnij oznaczenie (Pokaż)**.
+  - Szybkie akcje: bezpośrednie otwieranie w nowej karcie oraz kopiowanie linku do schowka.
+  - Skrót `Shift + Prawy klik` pozwala w każdej chwili otworzyć standardowe, domyślne menu przeglądarki.
+  - Ręcznie oznaczone filmy są trwale zapamiętywane w pamięci rozszerzenia (`Storage / GM_setValue`).
 - **Wielopoziomowe wykrywanie:**
   - Standardowe atrybuty: `[data-role="video-watched"]`
   - Klasy BEM: `.thumb-image-container__watched`, `[class*="video-watched"]`
   - Etykiety tekstowe w badge'ach: `"Watched"`, `"Obejrzane"`
+  - Lista ręcznie oznaczonych pozycji użytkownika.
 - **Błyskawiczne ukrywanie bez migotania:** Wykorzystanie selektorów CSS `:has()` w silniku przeglądarki Chromium / Brave.
 - **Wsparcie dla SPA i Infinite Scroll:** Monitorowanie doładowywania kolejnych kafelków przez zoptymalizowany `MutationObserver` z debouncingiem (`100ms`).
 - **Pływający interfejs (Floating UI Widget):**

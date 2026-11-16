@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         xHamster - Hide Watched Videos
 // @namespace    https://github.com/WilluxOne/xhamster-hide-watched
-// @version      1.0.0
-// @description  Automatycznie ukrywa już obejrzane filmy z oznaczeniem 'Watched' na xhamster.com i wszystkich podstronach. Zawiera prosty pływający interfejs, licznik w czasie rzeczywistym i aktualizacje z GitHuba.
+// @version      1.1.0
+// @description  Automatycznie ukrywa już obejrzane filmy z oznaczeniem 'Watched' na xhamster.com i wszystkich podstronach. Zawiera opcję oznaczania prawym przyciskiem myszy, prosty pływający interfejs i aktualizacje z GitHuba.
 // @author       WilluxOne
 // @match        *://*.xhamster.com/*
 // @match        *://xhamster.com/*
@@ -67,6 +67,7 @@
       this.enabled = Storage.get('enabled', true);
       this.mode = Storage.get('mode', 'hide'); // 'hide' (display:none) lub 'dim' (grayscale+opacity)
       this.minimized = Storage.get('minimized', false);
+      this.manualWatched = new Set(Storage.get('manual_watched', []));
 
       this.stats = {
         totalVideos: 0,
@@ -77,6 +78,8 @@
       this.observer = null;
       this.scanDebounceTimer = null;
       this.widgetElement = null;
+      this.contextMenuElement = null;
+      this.activeContextCard = null;
 
       if (this.autoStart && this.document) {
         this.init();
@@ -90,7 +93,26 @@
       this.initObserver();
       this.initHistoryHooks();
       this.renderWidget();
+      this.initContextMenu();
       this.registerTampermonkeyMenu();
+    }
+
+    saveManualWatched() {
+      Storage.set('manual_watched', Array.from(this.manualWatched));
+    }
+
+    getVideoIdentifier(card) {
+      if (!card) return null;
+      const id = card.getAttribute('data-video-id');
+      if (id) return String(id).trim();
+
+      const link = card.querySelector('a[href*="/videos/"]');
+      if (link) {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(/\/videos\/([^?#]+)/);
+        if (match) return match[1].trim();
+      }
+      return null;
     }
 
     injectStyles() {
@@ -141,16 +163,16 @@
           display: flex;
           align-items: center;
           gap: 8px;
-          background: rgba(26, 26, 26, 0.92);
+          background: rgba(26, 26, 26, 0.94);
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 30px;
           padding: 6px 14px;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
           transition: all 0.2s ease;
         }
         .xh-pill-bar:hover {
-          border-color: rgba(255, 255, 255, 0.25);
+          border-color: rgba(255, 255, 255, 0.28);
           box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
         }
 
@@ -317,6 +339,7 @@
         .xh-actions {
           display: flex;
           gap: 8px;
+          margin-bottom: 8px;
         }
         .xh-btn {
           flex: 1;
@@ -335,6 +358,49 @@
         .xh-btn:hover { background: #383838; color: #fff; }
         .xh-btn-primary { background: #007aff; border-color: #007aff; color: #fff; }
         .xh-btn-primary:hover { background: #0066d6; }
+
+        /* --- Menu Kontekstowe Prawego Przycisku Myszy --- */
+        #xh-context-menu {
+          display: none;
+          position: fixed;
+          z-index: 100000000;
+          background: #1e1e1e;
+          border: 1px solid #383838;
+          border-radius: 8px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+          padding: 4px 0;
+          min-width: 200px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-size: 12px;
+          user-select: none;
+        }
+        #xh-context-menu.active {
+          display: block;
+          animation: xhFadeIn 0.12s ease-out;
+        }
+        .xh-cm-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 14px;
+          color: #e0e0e0;
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s;
+        }
+        .xh-cm-item:hover {
+          background: #007aff;
+          color: #fff;
+        }
+        .xh-cm-divider {
+          height: 1px;
+          background: #2f2f2f;
+          margin: 4px 0;
+        }
+        .xh-cm-icon {
+          font-size: 14px;
+          width: 16px;
+          text-align: center;
+        }
       `;
 
       const style = this.document.createElement('style');
@@ -385,7 +451,6 @@
       ].join(', ');
 
       const allCards = Array.from(this.document.querySelectorAll(cardSelectors));
-      // Filtrujemy tylko unikalne kontenery nadrzędne
       const uniqueCards = new Set();
       allCards.forEach(el => {
         const topCard = el.closest('.thumb-list__item') || el.closest('.video-thumb') || el.closest('[data-video-id]') || el;
@@ -418,6 +483,12 @@
     isWatchedCard(card) {
       if (!card) return false;
 
+      // 0. Sprawdzenie ręcznie oznaczonej listy użytkownika
+      const id = this.getVideoIdentifier(card);
+      if (id && this.manualWatched.has(id)) {
+        return true;
+      }
+
       // 1. Sprawdzenie atrybutu data-role="video-watched"
       if (card.querySelector('[data-role="video-watched"]')) {
         return true;
@@ -445,6 +516,61 @@
       return false;
     }
 
+    markAsWatched(card) {
+      if (!card) return;
+      const id = this.getVideoIdentifier(card);
+      if (id) {
+        this.manualWatched.add(id);
+        this.saveManualWatched();
+      }
+
+      card.setAttribute('data-xh-watched', 'true');
+      card.setAttribute('data-xh-manual-watched', 'true');
+      card.classList.add('xh-watched-item');
+
+      // Dodaj wizualny badge jeśli nie istnieje
+      let badge = card.querySelector('.thumb-image-container__watched');
+      if (!badge) {
+        const thumbContainer = card.querySelector('.thumb-image-container') || card;
+        badge = this.document.createElement('div');
+        badge.className = 'thumb-image-container__watched xh-manual-badge';
+        badge.setAttribute('data-role', 'video-watched');
+        badge.textContent = 'Watched';
+        thumbContainer.appendChild(badge);
+      }
+
+      this.scan();
+    }
+
+    unmarkAsWatched(card) {
+      if (!card) return;
+      const id = this.getVideoIdentifier(card);
+      if (id) {
+        this.manualWatched.delete(id);
+        this.saveManualWatched();
+      }
+
+      card.removeAttribute('data-xh-watched');
+      card.removeAttribute('data-xh-manual-watched');
+      card.classList.remove('xh-watched-item');
+
+      const manualBadge = card.querySelector('.xh-manual-badge');
+      if (manualBadge) {
+        manualBadge.remove();
+      }
+
+      this.scan();
+    }
+
+    toggleManualWatched(card) {
+      if (!card) return;
+      if (this.isWatchedCard(card)) {
+        this.unmarkAsWatched(card);
+      } else {
+        this.markAsWatched(card);
+      }
+    }
+
     getStats() {
       return { ...this.stats };
     }
@@ -457,9 +583,8 @@
         let hasNewNodes = false;
         for (let i = 0; i < mutations.length; i++) {
           if (mutations[i].addedNodes && mutations[i].addedNodes.length > 0) {
-            // Ignorujemy zmiany w naszym własnym wstrzykniętym widżecie
             const target = mutations[i].target;
-            if (target && target.id === 'xh-hider-widget') continue;
+            if (target && (target.id === 'xh-hider-widget' || target.id === 'xh-context-menu')) continue;
 
             hasNewNodes = true;
             break;
@@ -509,6 +634,129 @@
       }
     }
 
+    // --- Obsługa Menu Kontekstowego Prawego Przycisku Myszy ---
+    initContextMenu() {
+      if (!this.document) return;
+
+      let menu = this.document.getElementById('xh-context-menu');
+      if (!menu) {
+        menu = this.document.createElement('div');
+        menu.id = 'xh-context-menu';
+        (this.document.body || this.document.documentElement).appendChild(menu);
+      }
+      this.contextMenuElement = menu;
+
+      // Globalne nasłuchiwanie prawego kliku (contextmenu)
+      this.document.addEventListener('contextmenu', (e) => {
+        // Shift + Prawy klik zachowuje natywne menu przeglądarki
+        if (e.shiftKey) {
+          this.hideContextMenu();
+          return;
+        }
+
+        const card = e.target.closest('.thumb-list__item, .video-thumb, [data-video-id], [data-role="video-thumb"], article');
+        if (!card) {
+          this.hideContextMenu();
+          return;
+        }
+
+        e.preventDefault();
+        this.showContextMenu(card, e.clientX, e.clientY);
+      });
+
+      // Zamykanie menu po kliknięciu poza nim lub przewinięciu
+      this.document.addEventListener('click', (e) => {
+        if (!menu.contains(e.target)) {
+          this.hideContextMenu();
+        }
+      });
+
+      if (this.window) {
+        this.window.addEventListener('scroll', () => this.hideContextMenu(), { passive: true });
+        this.window.addEventListener('resize', () => this.hideContextMenu(), { passive: true });
+      }
+    }
+
+    showContextMenu(card, x, y) {
+      if (!this.contextMenuElement) return;
+
+      this.activeContextCard = card;
+      const isWatched = this.isWatchedCard(card);
+      const videoLink = card.querySelector('a[href*="/videos/"]');
+      const href = videoLink ? (videoLink.href || videoLink.getAttribute('href') || '') : '';
+
+      this.contextMenuElement.innerHTML = `
+        <div class="xh-cm-item" id="xh-cm-toggle-watched">
+          <span class="xh-cm-icon">${isWatched ? '↩️' : '👁️'}</span>
+          <span>${isWatched ? 'Cofnij oznaczenie (Pokaż)' : 'Oznacz jako obejrzane (Ukryj)'}</span>
+        </div>
+        ${href ? `
+        <div class="xh-cm-divider"></div>
+        <div class="xh-cm-item" id="xh-cm-open-tab">
+          <span class="xh-cm-icon">🔗</span>
+          <span>Otwórz w nowej karcie</span>
+        </div>
+        <div class="xh-cm-item" id="xh-cm-copy-link">
+          <span class="xh-cm-icon">📋</span>
+          <span>Kopiuj link do filmu</span>
+        </div>
+        ` : ''}
+      `;
+
+      // Pozycjonowanie w granicach okna
+      const menuWidth = 220;
+      const menuHeight = 120;
+      const winWidth = this.window ? this.window.innerWidth : 1200;
+      const winHeight = this.window ? this.window.innerHeight : 800;
+
+      let posX = x;
+      let posY = y;
+      if (posX + menuWidth > winWidth) posX = Math.max(10, winWidth - menuWidth - 15);
+      if (posY + menuHeight > winHeight) posY = Math.max(10, winHeight - menuHeight - 15);
+
+      this.contextMenuElement.style.left = `${posX}px`;
+      this.contextMenuElement.style.top = `${posY}px`;
+      this.contextMenuElement.classList.add('active');
+
+      // Obsługa kliknięć w pozycje menu
+      const toggleOption = this.contextMenuElement.querySelector('#xh-cm-toggle-watched');
+      if (toggleOption) {
+        toggleOption.addEventListener('click', () => {
+          this.toggleManualWatched(this.activeContextCard);
+          this.hideContextMenu();
+        });
+      }
+
+      const openTabOption = this.contextMenuElement.querySelector('#xh-cm-open-tab');
+      if (openTabOption && href) {
+        openTabOption.addEventListener('click', () => {
+          if (this.window) {
+            this.window.open(href, '_blank');
+          }
+          this.hideContextMenu();
+        });
+      }
+
+      const copyLinkOption = this.contextMenuElement.querySelector('#xh-cm-copy-link');
+      if (copyLinkOption && href) {
+        copyLinkOption.addEventListener('click', () => {
+          try {
+            if (this.window && this.window.navigator && this.window.navigator.clipboard) {
+              this.window.navigator.clipboard.writeText(href);
+            }
+          } catch (e) {}
+          this.hideContextMenu();
+        });
+      }
+    }
+
+    hideContextMenu() {
+      if (this.contextMenuElement) {
+        this.contextMenuElement.classList.remove('active');
+      }
+      this.activeContextCard = null;
+    }
+
     // --- Pływający interfejs UI ---
     renderWidget() {
       if (!this.document || this.document.getElementById('xh-hider-widget')) return;
@@ -552,11 +800,15 @@
             <div><span>Obejrzane (ukryte):</span> <span class="xh-stats-val" id="xh-stat-watched">${this.stats.watchedCount}</span></div>
             <div><span>Pozostałe nowe:</span> <span class="xh-stats-val" id="xh-stat-unwatched">${this.stats.unwatchedCount}</span></div>
             <div><span>Wszystkie filmy:</span> <span class="xh-stats-val" id="xh-stat-total">${this.stats.totalVideos}</span></div>
+            <div><span>Ręcznie oznaczone:</span> <span class="xh-stats-val" id="xh-stat-manual">${this.manualWatched.size}</span></div>
           </div>
 
           <div class="xh-actions">
             <button type="button" class="xh-btn" id="xh-rescan-btn">Odśwież skan</button>
-            <a href="https://github.com/WilluxOne/xhamster-hide-watched" target="_blank" rel="noopener noreferrer" class="xh-btn xh-btn-primary" title="Sprawdź aktualizacje lub kod na GitHub">GitHub (v1.0.0)</a>
+            <button type="button" class="xh-btn" id="xh-clear-manual-btn" title="Czyści pamięć ręcznie oznaczonych filmów">Reset ręcznych</button>
+          </div>
+          <div class="xh-actions">
+            <a href="https://github.com/WilluxOne/xhamster-hide-watched" target="_blank" rel="noopener noreferrer" class="xh-btn xh-btn-primary" title="Sprawdź aktualizacje lub kod na GitHub">GitHub (v1.1.0)</a>
           </div>
         </div>
       `;
@@ -564,7 +816,7 @@
       (this.document.body || this.document.documentElement).appendChild(widget);
       this.widgetElement = widget;
 
-      // Zdarzenia
+      // Zdarzenia UI
       const pillBtn = widget.querySelector('#xh-toggle-pill');
       const gearBtn = widget.querySelector('#xh-open-settings');
       const closeBtn = widget.querySelector('#xh-close-settings');
@@ -572,6 +824,7 @@
       const toggleCheckbox = widget.querySelector('#xh-toggle-enabled');
       const modeSelect = widget.querySelector('#xh-mode-select');
       const rescanBtn = widget.querySelector('#xh-rescan-btn');
+      const clearManualBtn = widget.querySelector('#xh-clear-manual-btn');
 
       if (pillBtn) {
         pillBtn.addEventListener('click', () => {
@@ -609,6 +862,16 @@
           this.scan();
         });
       }
+
+      if (clearManualBtn) {
+        clearManualBtn.addEventListener('click', () => {
+          if (confirm('Czy na pewno chcesz wyczyścić historię ręcznie oznaczonych pozycji?')) {
+            this.manualWatched.clear();
+            this.saveManualWatched();
+            this.scan();
+          }
+        });
+      }
     }
 
     updateWidgetUI() {
@@ -622,6 +885,7 @@
       const statWatched = this.document.getElementById('xh-stat-watched');
       const statUnwatched = this.document.getElementById('xh-stat-unwatched');
       const statTotal = this.document.getElementById('xh-stat-total');
+      const statManual = this.document.getElementById('xh-stat-manual');
 
       if (dot) {
         if (this.enabled) dot.classList.remove('off');
@@ -643,6 +907,7 @@
       if (statWatched) statWatched.textContent = String(this.stats.watchedCount);
       if (statUnwatched) statUnwatched.textContent = String(this.stats.unwatchedCount);
       if (statTotal) statTotal.textContent = String(this.stats.totalVideos);
+      if (statManual) statManual.textContent = String(this.manualWatched.size);
     }
 
     registerTampermonkeyMenu() {
@@ -678,6 +943,10 @@
       if (this.widgetElement && this.widgetElement.parentNode) {
         this.widgetElement.parentNode.removeChild(this.widgetElement);
         this.widgetElement = null;
+      }
+      if (this.contextMenuElement && this.contextMenuElement.parentNode) {
+        this.contextMenuElement.parentNode.removeChild(this.contextMenuElement);
+        this.contextMenuElement = null;
       }
     }
   }

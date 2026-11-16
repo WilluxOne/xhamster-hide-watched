@@ -18,6 +18,9 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     });
     window = dom.window;
     document = window.document;
+    if (window.localStorage) {
+      window.localStorage.clear();
+    }
 
     delete require.cache[require.resolve('../xhamster-hide-watched.user.js')];
     XHamsterWatchedHider = require('../xhamster-hide-watched.user.js').XHamsterWatchedHider;
@@ -191,5 +194,111 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
 
     hider.scan();
     assert.equal(plVideo.getAttribute('data-xh-watched'), 'true', 'Polskie "Obejrzane" powinno zostać wykryte');
+  });
+
+  test('Ręczne oznaczanie filmu jako obejrzany przez markAsWatched', () => {
+    const hider = new XHamsterWatchedHider({
+      window,
+      document,
+      autoStart: true
+    });
+
+    const item3 = document.querySelector('[data-video-id="103"]');
+    assert.equal(item3.getAttribute('data-xh-watched'), null, 'Początkowo film 103 nie jest obejrzany');
+
+    hider.markAsWatched(item3);
+
+    assert.equal(item3.getAttribute('data-xh-watched'), 'true', 'Film 103 powinien otrzymać data-xh-watched="true"');
+    assert.equal(hider.isWatchedCard(item3), true, 'isWatchedCard powinno zwrócić true dla filmu 103');
+    assert.equal(hider.getStats().watchedCount, 5, 'Liczba obejrzanych powinna wzrosnąć do 5');
+
+    // Weryfikacja dodania fizycznego znacznika Watched
+    const badge = item3.querySelector('.thumb-image-container__watched');
+    assert.ok(badge, 'Powinien zostać dodany wizualny element znacznika Watched');
+
+    hider.destroy();
+  });
+
+  test('Cofnięcie ręcznego oznaczenia filmu przez unmarkAsWatched', () => {
+    const hider = new XHamsterWatchedHider({
+      window,
+      document,
+      autoStart: true
+    });
+
+    const item3 = document.querySelector('[data-video-id="103"]');
+    hider.markAsWatched(item3);
+    assert.equal(hider.getStats().watchedCount, 5);
+
+    hider.unmarkAsWatched(item3);
+    assert.equal(item3.getAttribute('data-xh-watched'), null);
+    assert.equal(hider.getStats().watchedCount, 4, 'Liczba obejrzanych powinna spaść z powrotem do 4');
+
+    hider.destroy();
+  });
+
+  test('Zdarzenie prawego kliku (contextmenu) na karcie wideo powinno wyświetlić menu kontekstowe', () => {
+    const hider = new XHamsterWatchedHider({
+      window,
+      document,
+      autoStart: true
+    });
+
+    const item3 = document.querySelector('[data-video-id="103"]');
+    const img = item3.querySelector('img');
+
+    // Symulacja zdarzenia contextmenu (prawy klik)
+    const contextEvent = new window.MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 150,
+      clientY: 200,
+      shiftKey: false
+    });
+
+    img.dispatchEvent(contextEvent);
+
+    const menu = document.getElementById('xh-context-menu');
+    assert.ok(menu, 'Menu kontekstowe powinno zostać utworzone i dołączone');
+    assert.equal(menu.classList.contains('active'), true, 'Menu powinno być aktywne/widoczne');
+
+    const markOption = menu.querySelector('#xh-cm-toggle-watched');
+    assert.ok(markOption, 'Opcja oznaczania powinna istnieć w menu');
+    assert.ok(markOption.textContent.includes('Oznacz jako obejrzane'), 'Treść opcji powinna proponować oznaczenie');
+
+    // Kliknięcie w opcję powinno oznaczyć pozycję jako obejrzaną
+    markOption.click();
+
+    assert.equal(item3.getAttribute('data-xh-watched'), 'true', 'Film 103 powinien być oznaczony po kliknięciu w menu');
+    assert.equal(menu.classList.contains('active'), false, 'Menu powinno się zamknąć po kliknięciu');
+
+    hider.destroy();
+  });
+
+  test('Shift + Prawy klik nie powinien przechwytywać zdarzenia ani otwierać menu autorskiego', () => {
+    const hider = new XHamsterWatchedHider({
+      window,
+      document,
+      autoStart: true
+    });
+
+    const item3 = document.querySelector('[data-video-id="103"]');
+
+    const shiftEvent = new window.MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 100,
+      clientY: 100,
+      shiftKey: true
+    });
+
+    item3.dispatchEvent(shiftEvent);
+
+    const menu = document.getElementById('xh-context-menu');
+    if (menu) {
+      assert.equal(menu.classList.contains('active'), false, 'Menu autorskie nie może się otworzyć przy Shift+RightClick');
+    }
+
+    hider.destroy();
   });
 });
