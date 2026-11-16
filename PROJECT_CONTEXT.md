@@ -3,13 +3,13 @@
 **Data utworzenia:** 2026-11-17  
 **Autor:** WilluxOne  
 **Środowisko:** Windows 11 x64, Node.js v24.20.0, Tampermonkey (Brave/Chromium/Firefox)  
-**Stan projektu:** Zakończony pomyślnie (Etap v1.1.0 – obsługa prawego kliku i ręcznego oznaczania)
+**Stan projektu:** Zakończony pomyślnie (Etap v1.2.0 – otwarcie w nowej karcie pod prawym klikiem z GM_openInTab)
 
 ---
 
 ## 1. Cel Projektu
 Stworzenie zaawansowanego, a zarazem prostego w obsłudze skryptu Tampermonkey przeznaczonego dla serwisu `https://xhamster.com` oraz wszystkich jego podstron (kategorie, tagi, wyniki wyszukiwania, kanały, podgląd wideo, subdomeny).
-Skrypt identyfikuje pozycje oznaczone jako już obejrzane (**Watched**) oraz umożliwia ręczne oznaczanie filmów jako obejrzane pod prawym przyciskiem myszy (Context Menu). Automatycznie ukrywa je lub wyszarza, zapobiegając zaśmiecaniu katalogu treściami, które użytkownik już widział. Posiada nowoczesny pływający interfejs UI ze statystykami na żywo oraz obsługę automatycznych aktualizacji z GitHuba (`@updateURL`, `@downloadURL`).
+Skrypt identyfikuje pozycje oznaczone jako już obejrzane (**Watched**) oraz oferuje dedykowane menu kontekstowe pod prawym przyciskiem myszy (otwarcie filmu w nowej karcie bez blokad popup, ręczne oznaczanie filmu jako obejrzany/nieobejrzany, kopiowanie linku). Automatycznie ukrywa je lub wyszarza, zapobiegając zaśmiecaniu katalogu treściami, które użytkownik już widział. Posiada nowoczesny pływający interfejs UI ze statystykami na żywo oraz obsługę automatycznych aktualizacji z GitHuba (`@updateURL`, `@downloadURL`).
 
 ---
 
@@ -79,6 +79,11 @@ Na Pulpicie utworzono skrót:
 
 ## 5. Historia Wersji i Zrealizowane Zadania
 
+- **v1.2.0 (2026-11-17):**
+  - Dodanie i wyeksponowanie opcji „Otwórz w nowej karcie” na pierwszym miejscu menu kontekstowego PPM.
+  - Implementacja odpornego mechanizmu ekstrakcji URL (`getVideoUrl`) obsługującego karty będące tagami `<a>`, linki zagnieżdżone, relatywne ścieżki i fallbacki `data-video-id`.
+  - Integracja z `@grant GM_openInTab` gwarantująca bezproblemowe otwieranie kart z ominięciem blokad wyskakujących okienek (popup blocker) przeglądarki Brave/Chromium.
+  - Rozszerzenie zestawu testów do 13 przypadków (100% pass).
 - **v1.1.0 (2026-11-17):**
   - Dodanie obsługi zdarzenia `contextmenu` (prawy przycisk myszy) na kafelkach wideo.
   - Implementacja dedykowanego ciemnego menu kontekstowego z opcją „Oznacz jako obejrzane (Ukryj)” oraz „Cofnij oznaczenie”.

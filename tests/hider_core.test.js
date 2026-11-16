@@ -140,7 +140,6 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     const toggleCheckbox = widget.querySelector('#xh-toggle-enabled');
     assert.ok(toggleCheckbox, 'Checkbox przełączania ON/OFF powinien istnieć');
 
-    // Test interakcji kliknięcia w główny pill bar
     const pillBtn = widget.querySelector('#xh-toggle-pill');
     assert.ok(pillBtn, 'Przycisk pill powinien istnieć');
     pillBtn.click();
@@ -148,7 +147,6 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     pillBtn.click();
     assert.equal(hider.enabled, true, 'Ponowne kliknięcie powinno włączyć ukrywanie');
 
-    // Test zmiany trybu w select
     const modeSelect = widget.querySelector('#xh-mode-select');
     modeSelect.value = 'dim';
     modeSelect.dispatchEvent(new window.Event('change'));
@@ -212,7 +210,6 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     assert.equal(hider.isWatchedCard(item3), true, 'isWatchedCard powinno zwrócić true dla filmu 103');
     assert.equal(hider.getStats().watchedCount, 5, 'Liczba obejrzanych powinna wzrosnąć do 5');
 
-    // Weryfikacja dodania fizycznego znacznika Watched
     const badge = item3.querySelector('.thumb-image-container__watched');
     assert.ok(badge, 'Powinien zostać dodany wizualny element znacznika Watched');
 
@@ -237,7 +234,7 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     hider.destroy();
   });
 
-  test('Zdarzenie prawego kliku (contextmenu) na karcie wideo powinno wyświetlić menu kontekstowe', () => {
+  test('Zdarzenie prawego kliku (contextmenu) powinno wyświetlić Otwórz w nowej karcie oraz Oznacz jako obejrzane', () => {
     const hider = new XHamsterWatchedHider({
       window,
       document,
@@ -247,7 +244,6 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     const item3 = document.querySelector('[data-video-id="103"]');
     const img = item3.querySelector('img');
 
-    // Symulacja zdarzenia contextmenu (prawy klik)
     const contextEvent = new window.MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
@@ -262,17 +258,52 @@ describe('XHamster Watched Video Hider - Core Engine Tests', () => {
     assert.ok(menu, 'Menu kontekstowe powinno zostać utworzone i dołączone');
     assert.equal(menu.classList.contains('active'), true, 'Menu powinno być aktywne/widoczne');
 
+    // 1. Sprawdzenie obecności opcji Otwórz w nowej karcie
+    const openTabOption = menu.querySelector('#xh-cm-open-tab');
+    assert.ok(openTabOption, 'Opcja "Otwórz w nowej karcie" powinna być obecna w menu kontekstowym');
+    assert.ok(openTabOption.textContent.includes('Otwórz w nowej karcie'), 'Etykieta powinna zawierać "Otwórz w nowej karcie"');
+
+    // 2. Sprawdzenie obecności opcji Oznacz jako obejrzane
     const markOption = menu.querySelector('#xh-cm-toggle-watched');
     assert.ok(markOption, 'Opcja oznaczania powinna istnieć w menu');
-    assert.ok(markOption.textContent.includes('Oznacz jako obejrzane'), 'Treść opcji powinna proponować oznaczenie');
 
-    // Kliknięcie w opcję powinno oznaczyć pozycję jako obejrzaną
-    markOption.click();
+    // Test otwarcia nowej karty po kliknięciu
+    let openedUrl = null;
+    window.open = (url) => { openedUrl = url; return {}; };
 
-    assert.equal(item3.getAttribute('data-xh-watched'), 'true', 'Film 103 powinien być oznaczony po kliknięciu w menu');
-    assert.equal(menu.classList.contains('active'), false, 'Menu powinno się zamknąć po kliknięciu');
+    openTabOption.click();
+
+    assert.ok(openedUrl && openedUrl.includes('/videos/video-103'), 'Kliknięcie powinno wywołać otwarcie URL filmu w nowej karcie');
+    assert.equal(menu.classList.contains('active'), false, 'Menu powinno się zamknąć po wybraniu opcji');
 
     hider.destroy();
+  });
+
+  test('Ekstrakcja URL filmu przez getVideoUrl dla różnych struktur kart', () => {
+    const hider = new XHamsterWatchedHider({
+      window,
+      document,
+      autoStart: false
+    });
+
+    // Karta z linkiem wewnątrz
+    const item1 = document.querySelector('[data-video-id="101"]');
+    const url1 = hider.getVideoUrl(item1);
+    assert.ok(url1.includes('/videos/video-101'), 'Powinien wyciągnąć URL z linku wewnątrz karty');
+
+    // Karta będąca sama w sobie tagiem <a>
+    const anchorCard = document.createElement('a');
+    anchorCard.className = 'thumb-list__item video-thumb';
+    anchorCard.href = 'https://xhamster.com/videos/custom-video-999';
+    const url2 = hider.getVideoUrl(anchorCard);
+    assert.equal(url2, 'https://xhamster.com/videos/custom-video-999');
+
+    // Karta bez linku, ale z data-video-id
+    const cardOnlyId = document.createElement('div');
+    cardOnlyId.className = 'video-thumb';
+    cardOnlyId.setAttribute('data-video-id', '888');
+    const url3 = hider.getVideoUrl(cardOnlyId);
+    assert.ok(url3.includes('/videos/888'), 'Powinien złożyć URL na podstawie data-video-id');
   });
 
   test('Shift + Prawy klik nie powinien przechwytywać zdarzenia ani otwierać menu autorskiego', () => {

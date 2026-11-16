@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         xHamster - Hide Watched Videos
 // @namespace    https://github.com/WilluxOne/xhamster-hide-watched
-// @version      1.1.0
-// @description  Automatycznie ukrywa już obejrzane filmy z oznaczeniem 'Watched' na xhamster.com i wszystkich podstronach. Zawiera opcję oznaczania prawym przyciskiem myszy, prosty pływający interfejs i aktualizacje z GitHuba.
+// @version      1.2.0
+// @description  Automatycznie ukrywa już obejrzane filmy z oznaczeniem 'Watched' na xhamster.com i wszystkich podstronach. Zawiera menu kontekstowe pod prawym przyciskiem myszy (otwórz w nowej karcie, oznacz jako obejrzane), prosty pływający interfejs i aktualizacje z GitHuba.
 // @author       WilluxOne
 // @match        *://*.xhamster.com/*
 // @match        *://xhamster.com/*
@@ -13,6 +13,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_addStyle
+// @grant        GM_openInTab
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/WilluxOne/xhamster-hide-watched/main/xhamster-hide-watched.user.js
 // @downloadURL  https://raw.githubusercontent.com/WilluxOne/xhamster-hide-watched/main/xhamster-hide-watched.user.js
@@ -108,11 +109,97 @@
 
       const link = card.querySelector('a[href*="/videos/"]');
       if (link) {
-        const href = link.getAttribute('href') || '';
+        const href = link.getAttribute('href') || link.href || '';
         const match = href.match(/\/videos\/([^?#]+)/);
         if (match) return match[1].trim();
       }
       return null;
+    }
+
+    getVideoUrl(card) {
+      if (!card) return '';
+
+      // 1. Jeśli sama karta to element <a>
+      if (card.tagName === 'A' && (card.href || card.getAttribute('href'))) {
+        return this.normalizeUrl(card.href || card.getAttribute('href'));
+      }
+
+      // 2. Wyszukanie linku wewnątrz karty
+      const link = card.querySelector('a[href*="/videos/"]') ||
+                   card.querySelector('a.video-thumb__title') ||
+                   card.querySelector('a.video-thumb__name') ||
+                   card.querySelector('a.thumb-image-container__link') ||
+                   card.querySelector('a[data-role="video-link"]') ||
+                   card.querySelector('a[data-role="thumb-link"]') ||
+                   card.querySelector('a[href]');
+
+      if (link) {
+        const rawHref = link.getAttribute('href') || link.href || '';
+        if (rawHref) {
+          return this.normalizeUrl(rawHref);
+        }
+      }
+
+      // 3. Fallback: konstrukcja URL z atrybutu data-video-id
+      const id = card.getAttribute('data-video-id');
+      if (id) {
+        const origin = (this.window && this.window.location && this.window.location.origin) ? this.window.location.origin : 'https://xhamster.com';
+        return `${origin}/videos/${id}`;
+      }
+
+      return '';
+    }
+
+    normalizeUrl(rawHref) {
+      if (!rawHref) return '';
+      if (rawHref.startsWith('http://') || rawHref.startsWith('https://')) {
+        return rawHref;
+      }
+      const origin = (this.window && this.window.location && this.window.location.origin) ? this.window.location.origin : 'https://xhamster.com';
+      if (rawHref.startsWith('/')) {
+        return origin + rawHref;
+      }
+      return `${origin}/${rawHref}`;
+    }
+
+    openInNewTab(url, inBackground = false) {
+      if (!url) return;
+
+      // 1. Priorytet: GM_openInTab z Tampermonkey (bypasuje blokady wyskakujących okienek)
+      try {
+        if (typeof GM_openInTab === 'function') {
+          GM_openInTab(url, { active: !inBackground, insert: true, setParent: true });
+          return;
+        }
+      } catch (e) {}
+
+      // 2. Standardowy window.open
+      if (this.window) {
+        try {
+          const win = this.window.open(url, '_blank', 'noopener,noreferrer');
+          if (win) {
+            if (inBackground) {
+              win.blur();
+              this.window.focus();
+            }
+            return;
+          }
+        } catch (e) {}
+      }
+
+      // 3. Fallback przez syntetyczny klik w element <a>
+      if (this.document) {
+        try {
+          const a = this.document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.display = 'none';
+          (this.document.body || this.document.documentElement).appendChild(a);
+          a.click();
+          a.remove();
+        } catch (e) {}
+      }
     }
 
     injectStyles() {
@@ -364,14 +451,14 @@
           display: none;
           position: fixed;
           z-index: 100000000;
-          background: #1e1e1e;
-          border: 1px solid #383838;
-          border-radius: 8px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
-          padding: 4px 0;
-          min-width: 200px;
+          background: #1c1c1e;
+          border: 1px solid #38383a;
+          border-radius: 10px;
+          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8);
+          padding: 6px 0;
+          min-width: 220px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          font-size: 12px;
+          font-size: 13px;
           user-select: none;
         }
         #xh-context-menu.active {
@@ -381,24 +468,25 @@
         .xh-cm-item {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 14px;
-          color: #e0e0e0;
+          gap: 10px;
+          padding: 9px 16px;
+          color: #f2f2f7;
           cursor: pointer;
+          text-decoration: none;
           transition: background 0.15s, color 0.15s;
         }
         .xh-cm-item:hover {
           background: #007aff;
-          color: #fff;
+          color: #ffffff;
         }
         .xh-cm-divider {
           height: 1px;
-          background: #2f2f2f;
-          margin: 4px 0;
+          background: #2c2c2e;
+          margin: 5px 0;
         }
         .xh-cm-icon {
-          font-size: 14px;
-          width: 16px;
+          font-size: 15px;
+          width: 18px;
           text-align: center;
         }
       `;
@@ -528,7 +616,6 @@
       card.setAttribute('data-xh-manual-watched', 'true');
       card.classList.add('xh-watched-item');
 
-      // Dodaj wizualny badge jeśli nie istnieje
       let badge = card.querySelector('.thumb-image-container__watched');
       if (!badge) {
         const thumbContainer = card.querySelector('.thumb-image-container') || card;
@@ -646,9 +733,9 @@
       }
       this.contextMenuElement = menu;
 
-      // Globalne nasłuchiwanie prawego kliku (contextmenu)
+      // Globalne przechwytywanie zdarzenia prawego kliku (contextmenu)
       this.document.addEventListener('contextmenu', (e) => {
-        // Shift + Prawy klik zachowuje natywne menu przeglądarki
+        // Shift + Prawy klik zachowuje standardowe menu przeglądarki
         if (e.shiftKey) {
           this.hideContextMenu();
           return;
@@ -664,7 +751,7 @@
         this.showContextMenu(card, e.clientX, e.clientY);
       });
 
-      // Zamykanie menu po kliknięciu poza nim lub przewinięciu
+      // Zamknięcie menu po kliknięciu poza obszarem
       this.document.addEventListener('click', (e) => {
         if (!menu.contains(e.target)) {
           this.hideContextMenu();
@@ -682,30 +769,30 @@
 
       this.activeContextCard = card;
       const isWatched = this.isWatchedCard(card);
-      const videoLink = card.querySelector('a[href*="/videos/"]');
-      const href = videoLink ? (videoLink.href || videoLink.getAttribute('href') || '') : '';
+      const videoUrl = this.getVideoUrl(card);
 
+      // Skonstruuj menu: "Otwórz w nowej karcie" ZAWSZE na pierwszym miejscu
       this.contextMenuElement.innerHTML = `
-        <div class="xh-cm-item" id="xh-cm-toggle-watched">
+        <div class="xh-cm-item" id="xh-cm-open-tab" title="Otwiera wideo w nowej karcie przeglądarki">
+          <span class="xh-cm-icon">🔗</span>
+          <span><strong>Otwórz w nowej karcie</strong></span>
+        </div>
+        <div class="xh-cm-item" id="xh-cm-toggle-watched" title="Ukrywa lub przywraca widoczność tego filmu">
           <span class="xh-cm-icon">${isWatched ? '↩️' : '👁️'}</span>
           <span>${isWatched ? 'Cofnij oznaczenie (Pokaż)' : 'Oznacz jako obejrzane (Ukryj)'}</span>
         </div>
-        ${href ? `
+        ${videoUrl ? `
         <div class="xh-cm-divider"></div>
-        <div class="xh-cm-item" id="xh-cm-open-tab">
-          <span class="xh-cm-icon">🔗</span>
-          <span>Otwórz w nowej karcie</span>
-        </div>
-        <div class="xh-cm-item" id="xh-cm-copy-link">
+        <div class="xh-cm-item" id="xh-cm-copy-link" title="Kopiuje pełny adres URL filmu do schowka">
           <span class="xh-cm-icon">📋</span>
           <span>Kopiuj link do filmu</span>
         </div>
         ` : ''}
       `;
 
-      // Pozycjonowanie w granicach okna
-      const menuWidth = 220;
-      const menuHeight = 120;
+      // Inteligentne pozycjonowanie w granicach okna
+      const menuWidth = 230;
+      const menuHeight = 130;
       const winWidth = this.window ? this.window.innerWidth : 1200;
       const winHeight = this.window ? this.window.innerHeight : 800;
 
@@ -718,33 +805,37 @@
       this.contextMenuElement.style.top = `${posY}px`;
       this.contextMenuElement.classList.add('active');
 
-      // Obsługa kliknięć w pozycje menu
-      const toggleOption = this.contextMenuElement.querySelector('#xh-cm-toggle-watched');
-      if (toggleOption) {
-        toggleOption.addEventListener('click', () => {
-          this.toggleManualWatched(this.activeContextCard);
-          this.hideContextMenu();
-        });
-      }
-
+      // Obsługa kliknięć
       const openTabOption = this.contextMenuElement.querySelector('#xh-cm-open-tab');
-      if (openTabOption && href) {
-        openTabOption.addEventListener('click', () => {
-          if (this.window) {
-            this.window.open(href, '_blank');
+      if (openTabOption) {
+        openTabOption.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetUrl = this.getVideoUrl(this.activeContextCard) || videoUrl;
+          if (targetUrl) {
+            this.openInNewTab(targetUrl, false);
           }
           this.hideContextMenu();
         });
       }
 
+      const toggleOption = this.contextMenuElement.querySelector('#xh-cm-toggle-watched');
+      if (toggleOption) {
+        toggleOption.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleManualWatched(this.activeContextCard);
+          this.hideContextMenu();
+        });
+      }
+
       const copyLinkOption = this.contextMenuElement.querySelector('#xh-cm-copy-link');
-      if (copyLinkOption && href) {
-        copyLinkOption.addEventListener('click', () => {
+      if (copyLinkOption && videoUrl) {
+        copyLinkOption.addEventListener('click', (e) => {
+          e.stopPropagation();
           try {
             if (this.window && this.window.navigator && this.window.navigator.clipboard) {
-              this.window.navigator.clipboard.writeText(href);
+              this.window.navigator.clipboard.writeText(videoUrl);
             }
-          } catch (e) {}
+          } catch (err) {}
           this.hideContextMenu();
         });
       }
@@ -808,7 +899,7 @@
             <button type="button" class="xh-btn" id="xh-clear-manual-btn" title="Czyści pamięć ręcznie oznaczonych filmów">Reset ręcznych</button>
           </div>
           <div class="xh-actions">
-            <a href="https://github.com/WilluxOne/xhamster-hide-watched" target="_blank" rel="noopener noreferrer" class="xh-btn xh-btn-primary" title="Sprawdź aktualizacje lub kod na GitHub">GitHub (v1.1.0)</a>
+            <a href="https://github.com/WilluxOne/xhamster-hide-watched" target="_blank" rel="noopener noreferrer" class="xh-btn xh-btn-primary" title="Sprawdź aktualizacje lub kod na GitHub">GitHub (v1.2.0)</a>
           </div>
         </div>
       `;
@@ -816,7 +907,6 @@
       (this.document.body || this.document.documentElement).appendChild(widget);
       this.widgetElement = widget;
 
-      // Zdarzenia UI
       const pillBtn = widget.querySelector('#xh-toggle-pill');
       const gearBtn = widget.querySelector('#xh-open-settings');
       const closeBtn = widget.querySelector('#xh-close-settings');
@@ -951,7 +1041,6 @@
     }
   }
 
-  // Automatyczny start w przeglądarce
   let instance = null;
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     instance = new XHamsterWatchedHider();
